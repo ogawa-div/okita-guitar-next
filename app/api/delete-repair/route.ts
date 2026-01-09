@@ -19,17 +19,26 @@ export async function POST(request: Request) {
         const fileContent = fs.readFileSync(dataPath, 'utf-8');
         const existingData = JSON.parse(fileContent);
 
-        // Filter out items with the given ID
-        // Note: This removes ALL items for that case ID.
-        const updatedData = existingData.filter((item: any) => item.id !== id);
+        // Find the target item to get its raw_text (grouping key)
+        const targetItem = existingData.find((item: any) => item.id === id);
 
-        if (existingData.length === updatedData.length) {
+        if (!targetItem) {
             return NextResponse.json({ error: 'Item not found' }, { status: 404 });
         }
 
+        const targetRawText = targetItem.raw_text;
+
+        // Filter out ALL items that have the same raw_text
+        // This ensures we delete the entire "Case" even if it's split into multiple work items
+        // For manual entries, raw_text is unique per case (contains ID usually or generated unique string), 
+        // For imported entries, raw_text is the full original text block, which is shared by all items in that case.
+        const updatedData = existingData.filter((item: any) => item.raw_text !== targetRawText);
+
+        const deletedCount = existingData.length - updatedData.length;
+
         fs.writeFileSync(dataPath, JSON.stringify(updatedData, null, 2));
 
-        return NextResponse.json({ success: true, count: existingData.length - updatedData.length });
+        return NextResponse.json({ success: true, count: deletedCount });
 
     } catch (error) {
         console.error('Failed to delete repair entry:', error);
